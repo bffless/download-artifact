@@ -30524,7 +30524,7 @@ function getInputs() {
     const apiUrl = core.getInput('api-url', { required: true });
     const apiKey = core.getInput('api-key', { required: true });
     core.setSecret(apiKey);
-    const sourcePath = core.getInput('source-path', { required: true });
+    const sourcePath = core.getInput('source-path') || './';
     // Resolution: one of alias, commit-sha, or branch required
     const alias = core.getInput('alias') || undefined;
     const commitSha = core.getInput('commit-sha') || undefined;

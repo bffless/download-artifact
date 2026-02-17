@@ -14,8 +14,9 @@ inputs:
     description: 'API key for authentication (X-API-Key header)'
     required: true
   source-path:
-    description: 'Path of files to download (e.g., ./dist, apps/frontend/dist)'
-    required: true
+    description: 'Path of files to download (e.g., ./dist, apps/frontend/dist). Defaults to ./ (entire artifact)'
+    required: false
+    default: './'
   alias:
     description: 'Deployment alias to download from (e.g., production, preview)'
     required: false
