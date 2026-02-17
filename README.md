@@ -1,6 +1,6 @@
 # BFFLESS Download Artifact
 
-GitHub Action to download build artifacts from a BFFLESS static asset hosting platform.
+[BFFLESS](https://bffless.com) is a static asset hosting platform for frontend builds. This GitHub Action downloads build artifacts from your BFFLESS instance.
 
 This is the counterpart to [bffless/upload-artifact](https://github.com/bffless/upload-artifact) - use upload-artifact to deploy files, and download-artifact to retrieve them.
 
