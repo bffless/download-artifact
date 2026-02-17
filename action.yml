@@ -1,0 +1,55 @@
+name: 'BFFLESS Download Artifact'
+description: 'Download build artifacts from a BFFLESS static asset hosting platform'
+author: 'bffless'
+
+branding:
+  icon: 'download-cloud'
+  color: 'blue'
+
+inputs:
+  api-url:
+    description: 'Base URL of the BFFLESS hosting platform'
+    required: true
+  api-key:
+    description: 'API key for authentication (X-API-Key header)'
+    required: true
+  source-path:
+    description: 'Path of files to download (e.g., ./dist, apps/frontend/dist)'
+    required: true
+  alias:
+    description: 'Deployment alias to download from (e.g., production, preview)'
+    required: false
+  commit-sha:
+    description: 'Specific commit SHA to download from'
+    required: false
+  branch:
+    description: 'Branch to download from (gets latest deployment)'
+    required: false
+  output-path:
+    description: 'Where to save downloaded files (default: same as source-path)'
+    required: false
+  repository:
+    description: 'Repository in owner/repo format (default: current repository)'
+    required: false
+  overwrite:
+    description: 'Overwrite existing files at output-path'
+    required: false
+    default: 'false'
+  summary:
+    description: 'Write a GitHub Step Summary'
+    required: false
+    default: 'true'
+
+outputs:
+  file-count:
+    description: 'Number of files downloaded'
+  total-size:
+    description: 'Total bytes downloaded'
+  commit-sha:
+    description: 'Commit SHA of downloaded deployment'
+  files:
+    description: 'JSON array of downloaded file paths'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output (keep dist/ for action to work)
+lib/
+
+# OS files
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+
+
+# Don't ignore dist/ - it's committed for GitHub Actions
+# dist/
+
+# Ignore .d.ts.map files - they contain absolute paths that differ between machines
+dist/*.d.ts.map
