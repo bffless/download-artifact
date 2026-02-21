@@ -32,6 +32,7 @@ export interface PrepareBatchDownloadRequest {
 export interface PrepareBatchDownloadResponse {
   presignedUrlsSupported: boolean;
   commitSha: string;
+  isPublic: boolean;
   files: DownloadFileInfo[];
 }
 
