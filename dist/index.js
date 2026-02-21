@@ -3449,6 +3449,565 @@ function copyFile(srcFile, destFile, force) {
 
 /***/ }),
 
+/***/ 681:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.requestPrepareBatchDownload = requestPrepareBatchDownload;
+exports.downloadFileFromPresignedUrl = downloadFileFromPresignedUrl;
+exports.downloadFileDirect = downloadFileDirect;
+exports.downloadFilesWithPresignedUrls = downloadFilesWithPresignedUrls;
+exports.downloadFilesDirect = downloadFilesDirect;
+const core = __importStar(__nccwpck_require__(6966));
+const fs = __importStar(__nccwpck_require__(9896));
+const path = __importStar(__nccwpck_require__(6928));
+const http = __importStar(__nccwpck_require__(8611));
+const https = __importStar(__nccwpck_require__(5692));
+const url_1 = __nccwpck_require__(7016);
+const http_1 = __nccwpck_require__(9281);
+/**
+ * Request presigned URLs for batch download
+ */
+async function requestPrepareBatchDownload(apiUrl, apiKey, request) {
+    const url = new url_1.URL('/api/deployments/prepare-batch-download', apiUrl);
+    core.info(`Requesting download manifest for path: ${request.path}`);
+    const response = await (0, http_1.postJson)(url, request, apiKey);
+    return response;
+}
+/**
+ * Download a file from a presigned URL
+ */
+async function downloadFileFromPresignedUrl(downloadUrl, outputPath) {
+    const url = new url_1.URL(downloadUrl);
+    const transport = url.protocol === 'https:' ? https : http;
+    // Ensure directory exists
+    const dir = path.dirname(outputPath);
+    fs.mkdirSync(dir, { recursive: true });
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(outputPath);
+        const req = transport.get(url, (res) => {
+            if (res.statusCode === 301 || res.statusCode === 302) {
+                // Handle redirects
+                const redirectUrl = res.headers.location;
+                if (redirectUrl) {
+                    file.close();
+                    fs.unlinkSync(outputPath);
+                    downloadFileFromPresignedUrl(redirectUrl, outputPath).then(resolve).catch(reject);
+                    return;
+                }
+            }
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                res.pipe(file);
+                file.on('finish', () => {
+                    file.close();
+                    resolve();
+                });
+            }
+            else {
+                file.close();
+                fs.unlinkSync(outputPath);
+                reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+            }
+        });
+        req.on('error', (err) => {
+            file.close();
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+            }
+            reject(err);
+        });
+        file.on('error', (err) => {
+            file.close();
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+            }
+            reject(err);
+        });
+    });
+}
+/**
+ * Download a file directly through the API (fallback for local storage)
+ */
+async function downloadFileDirect(apiUrl, apiKey, filePath, outputPath, params) {
+    const url = new url_1.URL(`/api/files/${filePath}`, apiUrl);
+    url.searchParams.set('repository', params.repository);
+    if (params.alias)
+        url.searchParams.set('alias', params.alias);
+    if (params.commitSha)
+        url.searchParams.set('commitSha', params.commitSha);
+    if (params.branch)
+        url.searchParams.set('branch', params.branch);
+    const transport = url.protocol === 'https:' ? https : http;
+    // Ensure directory exists
+    const dir = path.dirname(outputPath);
+    fs.mkdirSync(dir, { recursive: true });
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(outputPath);
+        const req = transport.get(url, {
+            headers: {
+                'X-API-Key': apiKey,
+            },
+        }, (res) => {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                res.pipe(file);
+                file.on('finish', () => {
+                    file.close();
+                    resolve();
+                });
+            }
+            else {
+                file.close();
+                fs.unlinkSync(outputPath);
+                reject(new Error(`Download failed for ${filePath}: HTTP ${res.statusCode}`));
+            }
+        });
+        req.on('error', (err) => {
+            file.close();
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+            }
+            reject(new Error(`Download failed for ${filePath}: ${err.message}`));
+        });
+        file.on('error', (err) => {
+            file.close();
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+            }
+            reject(err);
+        });
+    });
+}
+/**
+ * Download files in parallel with concurrency limit
+ */
+async function downloadFilesWithPresignedUrls(files, outputDir, concurrency = 10, retries = 3) {
+    const success = [];
+    const failed = [];
+    // Process files in batches
+    for (let i = 0; i < files.length; i += concurrency) {
+        const batch = files.slice(i, i + concurrency);
+        const results = await Promise.allSettled(batch.map(async (file) => {
+            const outputPath = path.join(outputDir, file.path);
+            let lastError;
+            for (let attempt = 0; attempt < retries; attempt++) {
+                try {
+                    await downloadFileFromPresignedUrl(file.downloadUrl, outputPath);
+                    return file.path;
+                }
+                catch (error) {
+                    lastError = error instanceof Error ? error : new Error(String(error));
+                    if (attempt < retries - 1) {
+                        // Exponential backoff: 1s, 2s, 4s
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise((resolve) => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            throw lastError;
+        }));
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                success.push(result.value);
+            }
+            else {
+                const errorMatch = result.reason.message?.match(/for (.+?):/);
+                const filePath = errorMatch?.[1] || 'unknown';
+                failed.push({
+                    path: filePath,
+                    error: result.reason.message || 'Unknown error',
+                });
+            }
+        }
+        // Log progress
+        const completed = success.length + failed.length;
+        if (completed % 100 === 0 || completed === files.length) {
+            core.info(`Download progress: ${completed}/${files.length} files`);
+        }
+    }
+    return { success, failed };
+}
+/**
+ * Download files directly through API (fallback)
+ */
+async function downloadFilesDirect(apiUrl, apiKey, files, outputDir, params, concurrency = 10, retries = 3) {
+    const success = [];
+    const failed = [];
+    // Process files in batches
+    for (let i = 0; i < files.length; i += concurrency) {
+        const batch = files.slice(i, i + concurrency);
+        const results = await Promise.allSettled(batch.map(async (file) => {
+            const outputPath = path.join(outputDir, file.path);
+            let lastError;
+            for (let attempt = 0; attempt < retries; attempt++) {
+                try {
+                    await downloadFileDirect(apiUrl, apiKey, file.path, outputPath, params);
+                    return file.path;
+                }
+                catch (error) {
+                    lastError = error instanceof Error ? error : new Error(String(error));
+                    if (attempt < retries - 1) {
+                        // Exponential backoff: 1s, 2s, 4s
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise((resolve) => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            throw lastError;
+        }));
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                success.push(result.value);
+            }
+            else {
+                const errorMatch = result.reason.message?.match(/for (.+?):/);
+                const filePath = errorMatch?.[1] || 'unknown';
+                failed.push({
+                    path: filePath,
+                    error: result.reason.message || 'Unknown error',
+                });
+            }
+        }
+        // Log progress
+        const completed = success.length + failed.length;
+        if (completed % 100 === 0 || completed === files.length) {
+            core.info(`Download progress: ${completed}/${files.length} files`);
+        }
+    }
+    return { success, failed };
+}
+//# sourceMappingURL=download.js.map
+
+/***/ }),
+
+/***/ 9281:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.postJson = postJson;
+const http = __importStar(__nccwpck_require__(8611));
+const https = __importStar(__nccwpck_require__(5692));
+/**
+ * POST JSON to an API endpoint
+ */
+async function postJson(url, body, apiKey) {
+    return new Promise((resolve, reject) => {
+        const bodyStr = JSON.stringify(body);
+        const transport = url.protocol === 'https:' ? https : http;
+        const req = transport.request(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(bodyStr),
+                'X-API-Key': apiKey,
+            },
+        }, (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const responseBody = Buffer.concat(chunks).toString('utf-8');
+                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                    try {
+                        const parsed = JSON.parse(responseBody);
+                        resolve(parsed);
+                    }
+                    catch {
+                        reject(new Error(`Failed to parse response: ${responseBody.substring(0, 200)}`));
+                    }
+                }
+                else {
+                    reject(new Error(`API request failed: HTTP ${res.statusCode} - ${responseBody.substring(0, 500)}`));
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(bodyStr);
+        req.end();
+    });
+}
+//# sourceMappingURL=http.js.map
+
+/***/ }),
+
+/***/ 4933:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.uploadFilesWithPresignedUrls = exports.uploadFileToPresignedUrl = exports.finalizeUpload = exports.requestPrepareBatchUpload = exports.downloadFilesDirect = exports.downloadFilesWithPresignedUrls = exports.downloadFileDirect = exports.downloadFileFromPresignedUrl = exports.requestPrepareBatchDownload = exports.postJson = void 0;
+// Types
+__exportStar(__nccwpck_require__(3708), exports);
+// HTTP utilities
+var http_1 = __nccwpck_require__(9281);
+Object.defineProperty(exports, "postJson", ({ enumerable: true, get: function () { return http_1.postJson; } }));
+// Download functions
+var download_1 = __nccwpck_require__(681);
+Object.defineProperty(exports, "requestPrepareBatchDownload", ({ enumerable: true, get: function () { return download_1.requestPrepareBatchDownload; } }));
+Object.defineProperty(exports, "downloadFileFromPresignedUrl", ({ enumerable: true, get: function () { return download_1.downloadFileFromPresignedUrl; } }));
+Object.defineProperty(exports, "downloadFileDirect", ({ enumerable: true, get: function () { return download_1.downloadFileDirect; } }));
+Object.defineProperty(exports, "downloadFilesWithPresignedUrls", ({ enumerable: true, get: function () { return download_1.downloadFilesWithPresignedUrls; } }));
+Object.defineProperty(exports, "downloadFilesDirect", ({ enumerable: true, get: function () { return download_1.downloadFilesDirect; } }));
+// Upload functions
+var upload_1 = __nccwpck_require__(2088);
+Object.defineProperty(exports, "requestPrepareBatchUpload", ({ enumerable: true, get: function () { return upload_1.requestPrepareBatchUpload; } }));
+Object.defineProperty(exports, "finalizeUpload", ({ enumerable: true, get: function () { return upload_1.finalizeUpload; } }));
+Object.defineProperty(exports, "uploadFileToPresignedUrl", ({ enumerable: true, get: function () { return upload_1.uploadFileToPresignedUrl; } }));
+Object.defineProperty(exports, "uploadFilesWithPresignedUrls", ({ enumerable: true, get: function () { return upload_1.uploadFilesWithPresignedUrls; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 3708:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// ============================================================================
+// Download Types
+// ============================================================================
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=types.js.map
+
+/***/ }),
+
+/***/ 2088:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.requestPrepareBatchUpload = requestPrepareBatchUpload;
+exports.finalizeUpload = finalizeUpload;
+exports.uploadFileToPresignedUrl = uploadFileToPresignedUrl;
+exports.uploadFilesWithPresignedUrls = uploadFilesWithPresignedUrls;
+const core = __importStar(__nccwpck_require__(6966));
+const fs = __importStar(__nccwpck_require__(9896));
+const http = __importStar(__nccwpck_require__(8611));
+const https = __importStar(__nccwpck_require__(5692));
+const url_1 = __nccwpck_require__(7016);
+const http_1 = __nccwpck_require__(9281);
+/**
+ * Request presigned URLs for batch upload
+ */
+async function requestPrepareBatchUpload(apiUrl, apiKey, request) {
+    const url = new url_1.URL('/api/deployments/prepare-batch-upload', apiUrl);
+    core.info(`Requesting presigned URLs for ${request.files.length} files...`);
+    const response = await (0, http_1.postJson)(url, request, apiKey);
+    return response;
+}
+/**
+ * Finalize a batch upload
+ */
+async function finalizeUpload(apiUrl, apiKey, request) {
+    const url = new url_1.URL('/api/deployments/finalize-upload', apiUrl);
+    core.info('Finalizing upload...');
+    const response = await (0, http_1.postJson)(url, request, apiKey);
+    return response;
+}
+/**
+ * Upload a file directly to a presigned URL
+ */
+async function uploadFileToPresignedUrl(presignedUrl, file) {
+    const url = new url_1.URL(presignedUrl);
+    const transport = url.protocol === 'https:' ? https : http;
+    return new Promise((resolve, reject) => {
+        const fileStream = fs.createReadStream(file.absolutePath);
+        const stats = fs.statSync(file.absolutePath);
+        const req = transport.request(url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': file.contentType,
+                'Content-Length': stats.size,
+            },
+        }, (res) => {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                resolve();
+            }
+            else {
+                // Consume response body
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () => {
+                    const body = Buffer.concat(chunks).toString('utf-8');
+                    reject(new Error(`Upload failed for ${file.relativePath}: HTTP ${res.statusCode} - ${body.substring(0, 200)}`));
+                });
+            }
+        });
+        req.on('error', (err) => {
+            reject(new Error(`Upload failed for ${file.relativePath}: ${err.message}`));
+        });
+        fileStream.pipe(req);
+    });
+}
+/**
+ * Upload files in parallel with concurrency limit
+ */
+async function uploadFilesWithPresignedUrls(files, concurrency = 10, retries = 3) {
+    const success = [];
+    const failed = [];
+    // Process files in batches
+    for (let i = 0; i < files.length; i += concurrency) {
+        const batch = files.slice(i, i + concurrency);
+        const results = await Promise.allSettled(batch.map(async ({ file, presignedUrl }) => {
+            let lastError;
+            for (let attempt = 0; attempt < retries; attempt++) {
+                try {
+                    await uploadFileToPresignedUrl(presignedUrl, file);
+                    return file.relativePath;
+                }
+                catch (error) {
+                    lastError = error instanceof Error ? error : new Error(String(error));
+                    if (attempt < retries - 1) {
+                        // Exponential backoff: 1s, 2s, 4s
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise((resolve) => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            throw lastError;
+        }));
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                success.push(result.value);
+            }
+            else {
+                const errorMatch = result.reason.message?.match(/for (.+?):/);
+                const filePath = errorMatch?.[1] || 'unknown';
+                failed.push({
+                    path: filePath,
+                    error: result.reason.message || 'Unknown error',
+                });
+            }
+        }
+        // Log progress
+        const completed = success.length + failed.length;
+        if (completed % 100 === 0 || completed === files.length) {
+            core.info(`Upload progress: ${completed}/${files.length} files`);
+        }
+    }
+    return { success, failed };
+}
+//# sourceMappingURL=upload.js.map
+
+/***/ }),
+
 /***/ 703:
 /***/ ((module) => {
 
@@ -29922,310 +30481,6 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 7822:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.requestPrepareBatchDownload = requestPrepareBatchDownload;
-exports.downloadFileFromPresignedUrl = downloadFileFromPresignedUrl;
-exports.downloadFileDirect = downloadFileDirect;
-exports.downloadFilesWithPresignedUrls = downloadFilesWithPresignedUrls;
-exports.downloadFilesDirect = downloadFilesDirect;
-const core = __importStar(__nccwpck_require__(6966));
-const fs = __importStar(__nccwpck_require__(9896));
-const path = __importStar(__nccwpck_require__(6928));
-const http = __importStar(__nccwpck_require__(8611));
-const https = __importStar(__nccwpck_require__(5692));
-const url_1 = __nccwpck_require__(7016);
-/**
- * Request presigned URLs for batch download
- */
-async function requestPrepareBatchDownload(apiUrl, apiKey, request) {
-    const url = new url_1.URL('/api/deployments/prepare-batch-download', apiUrl);
-    core.info(`Requesting download manifest for path: ${request.path}`);
-    const response = await postJson(url, request, apiKey);
-    return response;
-}
-/**
- * Download a file from a presigned URL
- */
-async function downloadFileFromPresignedUrl(downloadUrl, outputPath) {
-    const url = new url_1.URL(downloadUrl);
-    const transport = url.protocol === 'https:' ? https : http;
-    // Ensure directory exists
-    const dir = path.dirname(outputPath);
-    fs.mkdirSync(dir, { recursive: true });
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(outputPath);
-        const req = transport.get(url, (res) => {
-            if (res.statusCode === 301 || res.statusCode === 302) {
-                // Handle redirects
-                const redirectUrl = res.headers.location;
-                if (redirectUrl) {
-                    file.close();
-                    fs.unlinkSync(outputPath);
-                    downloadFileFromPresignedUrl(redirectUrl, outputPath)
-                        .then(resolve)
-                        .catch(reject);
-                    return;
-                }
-            }
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                res.pipe(file);
-                file.on('finish', () => {
-                    file.close();
-                    resolve();
-                });
-            }
-            else {
-                file.close();
-                fs.unlinkSync(outputPath);
-                reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-            }
-        });
-        req.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(outputPath)) {
-                fs.unlinkSync(outputPath);
-            }
-            reject(err);
-        });
-        file.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(outputPath)) {
-                fs.unlinkSync(outputPath);
-            }
-            reject(err);
-        });
-    });
-}
-/**
- * Download a file directly through the API (fallback for local storage)
- */
-async function downloadFileDirect(apiUrl, apiKey, filePath, outputPath, params) {
-    const url = new url_1.URL(`/api/files/${filePath}`, apiUrl);
-    url.searchParams.set('repository', params.repository);
-    if (params.alias)
-        url.searchParams.set('alias', params.alias);
-    if (params.commitSha)
-        url.searchParams.set('commitSha', params.commitSha);
-    if (params.branch)
-        url.searchParams.set('branch', params.branch);
-    const transport = url.protocol === 'https:' ? https : http;
-    // Ensure directory exists
-    const dir = path.dirname(outputPath);
-    fs.mkdirSync(dir, { recursive: true });
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(outputPath);
-        const req = transport.get(url, {
-            headers: {
-                'X-API-Key': apiKey,
-            },
-        }, (res) => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                res.pipe(file);
-                file.on('finish', () => {
-                    file.close();
-                    resolve();
-                });
-            }
-            else {
-                file.close();
-                fs.unlinkSync(outputPath);
-                reject(new Error(`Download failed for ${filePath}: HTTP ${res.statusCode}`));
-            }
-        });
-        req.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(outputPath)) {
-                fs.unlinkSync(outputPath);
-            }
-            reject(new Error(`Download failed for ${filePath}: ${err.message}`));
-        });
-        file.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(outputPath)) {
-                fs.unlinkSync(outputPath);
-            }
-            reject(err);
-        });
-    });
-}
-/**
- * Download files in parallel with concurrency limit
- */
-async function downloadFilesWithPresignedUrls(files, outputDir, concurrency = 10, retries = 3) {
-    const success = [];
-    const failed = [];
-    // Process files in batches
-    for (let i = 0; i < files.length; i += concurrency) {
-        const batch = files.slice(i, i + concurrency);
-        const results = await Promise.allSettled(batch.map(async (file) => {
-            const outputPath = path.join(outputDir, file.path);
-            let lastError;
-            for (let attempt = 0; attempt < retries; attempt++) {
-                try {
-                    await downloadFileFromPresignedUrl(file.downloadUrl, outputPath);
-                    return file.path;
-                }
-                catch (error) {
-                    lastError = error instanceof Error ? error : new Error(String(error));
-                    if (attempt < retries - 1) {
-                        // Exponential backoff: 1s, 2s, 4s
-                        const delay = Math.pow(2, attempt) * 1000;
-                        await new Promise((resolve) => setTimeout(resolve, delay));
-                    }
-                }
-            }
-            throw lastError;
-        }));
-        for (const result of results) {
-            if (result.status === 'fulfilled') {
-                success.push(result.value);
-            }
-            else {
-                const errorMatch = result.reason.message?.match(/for (.+?):/);
-                const filePath = errorMatch?.[1] || 'unknown';
-                failed.push({
-                    path: filePath,
-                    error: result.reason.message || 'Unknown error',
-                });
-            }
-        }
-        // Log progress
-        const completed = success.length + failed.length;
-        if (completed % 100 === 0 || completed === files.length) {
-            core.info(`Download progress: ${completed}/${files.length} files`);
-        }
-    }
-    return { success, failed };
-}
-/**
- * Download files directly through API (fallback)
- */
-async function downloadFilesDirect(apiUrl, apiKey, files, outputDir, params, concurrency = 10, retries = 3) {
-    const success = [];
-    const failed = [];
-    // Process files in batches
-    for (let i = 0; i < files.length; i += concurrency) {
-        const batch = files.slice(i, i + concurrency);
-        const results = await Promise.allSettled(batch.map(async (file) => {
-            const outputPath = path.join(outputDir, file.path);
-            let lastError;
-            for (let attempt = 0; attempt < retries; attempt++) {
-                try {
-                    await downloadFileDirect(apiUrl, apiKey, file.path, outputPath, params);
-                    return file.path;
-                }
-                catch (error) {
-                    lastError = error instanceof Error ? error : new Error(String(error));
-                    if (attempt < retries - 1) {
-                        // Exponential backoff: 1s, 2s, 4s
-                        const delay = Math.pow(2, attempt) * 1000;
-                        await new Promise((resolve) => setTimeout(resolve, delay));
-                    }
-                }
-            }
-            throw lastError;
-        }));
-        for (const result of results) {
-            if (result.status === 'fulfilled') {
-                success.push(result.value);
-            }
-            else {
-                const errorMatch = result.reason.message?.match(/for (.+?):/);
-                const filePath = errorMatch?.[1] || 'unknown';
-                failed.push({
-                    path: filePath,
-                    error: result.reason.message || 'Unknown error',
-                });
-            }
-        }
-        // Log progress
-        const completed = success.length + failed.length;
-        if (completed % 100 === 0 || completed === files.length) {
-            core.info(`Download progress: ${completed}/${files.length} files`);
-        }
-    }
-    return { success, failed };
-}
-/**
- * POST JSON to an API endpoint
- */
-async function postJson(url, body, apiKey) {
-    return new Promise((resolve, reject) => {
-        const bodyStr = JSON.stringify(body);
-        const transport = url.protocol === 'https:' ? https : http;
-        const req = transport.request(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(bodyStr),
-                'X-API-Key': apiKey,
-            },
-        }, (res) => {
-            const chunks = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                const responseBody = Buffer.concat(chunks).toString('utf-8');
-                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                    try {
-                        const parsed = JSON.parse(responseBody);
-                        resolve(parsed);
-                    }
-                    catch {
-                        reject(new Error(`Failed to parse response: ${responseBody.substring(0, 200)}`));
-                    }
-                }
-                else {
-                    reject(new Error(`API request failed: HTTP ${res.statusCode} - ${responseBody.substring(0, 500)}`));
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(bodyStr);
-        req.end();
-    });
-}
-
-
-/***/ }),
-
 /***/ 8637:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -30319,7 +30574,7 @@ exports.downloadArtifacts = downloadArtifacts;
 const core = __importStar(__nccwpck_require__(6966));
 const fs = __importStar(__nccwpck_require__(9896));
 const path = __importStar(__nccwpck_require__(6928));
-const api_1 = __nccwpck_require__(7822);
+const artifact_client_1 = __nccwpck_require__(4933);
 /**
  * Main download function - tries presigned URLs first, falls back to direct download
  */
@@ -30341,7 +30596,7 @@ async function downloadArtifacts(inputs) {
     fs.mkdirSync(outputDir, { recursive: true });
     core.info(`Output directory: ${outputDir}`);
     // Request download manifest
-    const prepareResponse = await (0, api_1.requestPrepareBatchDownload)(inputs.apiUrl, inputs.apiKey, {
+    const prepareResponse = await (0, artifact_client_1.requestPrepareBatchDownload)(inputs.apiUrl, inputs.apiKey, {
         repository: inputs.repository,
         path: inputs.sourcePath,
         alias: inputs.alias,
@@ -30364,12 +30619,12 @@ async function downloadArtifacts(inputs) {
     if (prepareResponse.presignedUrlsSupported) {
         // Download using presigned URLs (direct from storage)
         core.info('Downloading files directly from storage...');
-        downloadResults = await (0, api_1.downloadFilesWithPresignedUrls)(prepareResponse.files, outputDir, 10, 3);
+        downloadResults = await (0, artifact_client_1.downloadFilesWithPresignedUrls)(prepareResponse.files, outputDir, 10, 3);
     }
     else {
         // Fallback to direct download through API
         core.info('Storage does not support presigned URLs, downloading through API...');
-        downloadResults = await (0, api_1.downloadFilesDirect)(inputs.apiUrl, inputs.apiKey, prepareResponse.files, outputDir, {
+        downloadResults = await (0, artifact_client_1.downloadFilesDirect)(inputs.apiUrl, inputs.apiKey, prepareResponse.files, outputDir, {
             repository: inputs.repository,
             alias: inputs.alias,
             commitSha: inputs.commitSha,

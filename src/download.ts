@@ -6,7 +6,7 @@ import {
   requestPrepareBatchDownload,
   downloadFilesWithPresignedUrls,
   downloadFilesDirect,
-} from './api';
+} from '@bffless/artifact-client';
 
 /**
  * Main download function - tries presigned URLs first, falls back to direct download
