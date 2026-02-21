@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/bffless/download-artifact/compare/v1.2.0...v1.3.0) (2026-02-21)
+
+
+### Features
+
+* uses @bffless/artifact-client ([50f8c56](https://github.com/bffless/download-artifact/commit/50f8c56c98cb8f2e65f413215f77a9b3725a379a))
+
 ## [1.2.0](https://github.com/bffless/download-artifact/compare/v1.1.0...v1.2.0) (2026-02-21)
 
 
