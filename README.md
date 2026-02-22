@@ -1,6 +1,6 @@
 # bffless/download-artifact
 
-[BFFless](https://bffless.app) is a static asset hosting platform for builds artifacts. Think of it like [`actions/upload-artifact`](https://github.com/actions/upload-artifact) and [`actions/upload-artifact`](https://github.com/actions/upload-artifact) but with a BFF webserver to host the artifacts. This GitHub Action downloads build artifacts from your BFFLESS instance.
+[BFFless](https://bffless.app) is a static asset hosting platform for builds artifacts. Think of it like [`actions/download-artifact`](https://github.com/actions/download-artifact) and [`actions/upload-artifact`](https://github.com/actions/upload-artifact) but with a BFF webserver to host the artifacts. This GitHub Action downloads build artifacts from your BFFLESS instance.
 
 This is the counterpart to [bffless/upload-artifact](https://github.com/bffless/upload-artifact) - use upload-artifact to deploy files, and download-artifact to retrieve them.
 
