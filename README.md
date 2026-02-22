@@ -1,6 +1,6 @@
-# BFFLESS Download Artifact
+# bffless/download-artifact
 
-[BFFLESS](https://bffless.com) is a static asset hosting platform for frontend builds. This GitHub Action downloads build artifacts from your BFFLESS instance.
+[BFFless](https://bffless.app) is a static asset hosting platform for builds artifacts. Think of it like [`actions/upload-artifact`](https://github.com/actions/upload-artifact) and [`actions/upload-artifact`](https://github.com/actions/upload-artifact) but with a BFF webserver to host the artifacts. This GitHub Action downloads build artifacts from your BFFLESS instance.
 
 This is the counterpart to [bffless/upload-artifact](https://github.com/bffless/upload-artifact) - use upload-artifact to deploy files, and download-artifact to retrieve them.
 
@@ -55,29 +55,29 @@ This is the counterpart to [bffless/upload-artifact](https://github.com/bffless/
 
 ## Inputs
 
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `api-url` | Yes | - | Base URL of the BFFLESS hosting platform |
-| `api-key` | Yes | - | API key for authentication |
-| `source-path` | Yes | - | Path of files to download (e.g., `./dist`, `apps/frontend/dist`) |
-| `alias` | * | - | Deployment alias to download from (e.g., `production`, `preview`) |
-| `commit-sha` | * | - | Specific commit SHA to download from |
-| `branch` | * | - | Branch to download from (gets latest deployment) |
-| `output-path` | No | `{source-path}` | Where to save downloaded files |
-| `repository` | No | Current repo | Repository in `owner/repo` format |
-| `overwrite` | No | `false` | Overwrite existing files at output-path |
-| `summary` | No | `true` | Write a GitHub Step Summary |
+| Input         | Required | Default         | Description                                                       |
+| ------------- | -------- | --------------- | ----------------------------------------------------------------- |
+| `api-url`     | Yes      | -               | Base URL of the BFFLESS hosting platform                          |
+| `api-key`     | Yes      | -               | API key for authentication                                        |
+| `source-path` | Yes      | -               | Path of files to download (e.g., `./dist`, `apps/frontend/dist`)  |
+| `alias`       | \*       | -               | Deployment alias to download from (e.g., `production`, `preview`) |
+| `commit-sha`  | \*       | -               | Specific commit SHA to download from                              |
+| `branch`      | \*       | -               | Branch to download from (gets latest deployment)                  |
+| `output-path` | No       | `{source-path}` | Where to save downloaded files                                    |
+| `repository`  | No       | Current repo    | Repository in `owner/repo` format                                 |
+| `overwrite`   | No       | `false`         | Overwrite existing files at output-path                           |
+| `summary`     | No       | `true`          | Write a GitHub Step Summary                                       |
 
 \* One of `alias`, `commit-sha`, or `branch` is required.
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
-| `file-count` | Number of files downloaded |
-| `total-size` | Total bytes downloaded |
+| Output       | Description                         |
+| ------------ | ----------------------------------- |
+| `file-count` | Number of files downloaded          |
+| `total-size` | Total bytes downloaded              |
 | `commit-sha` | Commit SHA of downloaded deployment |
-| `files` | JSON array of downloaded file paths |
+| `files`      | JSON array of downloaded file paths |
 
 ## Examples
 
